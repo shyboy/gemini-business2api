@@ -41,22 +41,9 @@
                   class="w-full rounded-2xl border border-input bg-background px-3 py-2 text-sm"
                   placeholder="自动检测或手动填写"
                 />
-                <div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                  <span>账户操作代理</span>
-                  <HelpTip text="用于注册/登录/刷新操作的代理，留空则禁用" />
-                </div>
+                <label class="block text-xs text-muted-foreground">代理地址</label>
                 <input
-                  v-model="localSettings.basic.proxy_for_auth"
-                  type="text"
-                  class="w-full rounded-2xl border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="http://127.0.0.1:7890"
-                />
-                <div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                  <span>聊天操作代理</span>
-                  <HelpTip text="用于 JWT/会话/消息操作的代理，留空则禁用" />
-                </div>
-                <input
-                  v-model="localSettings.basic.proxy_for_chat"
+                  v-model="localSettings.basic.proxy"
                   type="text"
                   class="w-full rounded-2xl border border-input bg-background px-3 py-2 text-sm"
                   placeholder="http://127.0.0.1:7890"
@@ -67,38 +54,18 @@
             <div class="rounded-2xl border border-border bg-card p-4">
               <p class="text-xs uppercase tracking-[0.3em] text-muted-foreground">自动注册/刷新</p>
               <div class="mt-4 space-y-3">
-                <div class="grid grid-cols-2 items-center gap-x-6 gap-y-2">
-                  <div class="flex items-center justify-start gap-2">
-                    <Checkbox v-model="localSettings.basic.browser_headless">
-                      无头浏览器
-                    </Checkbox>
-                    <HelpTip text="无头模式适用于服务器环境（如 Docker）。若注册/刷新失败，建议关闭。" />
-                  </div>
-                </div>
                 <div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                  <span>浏览器引擎</span>
-                  <HelpTip text="UC: 支持无头/有头，但可能失败。DP: 支持无头/有头，更稳定，推荐使用。" />
+                  <span>邮箱服务</span>
+                  <HelpTip text="选择用于自动注册的邮箱服务提供商" />
                 </div>
                 <SelectMenu
-                  v-model="localSettings.basic.browser_engine"
-                  :options="browserEngineOptions"
+                  v-model="localSettings.basic.mail_service"
+                  :options="mailServiceOptions"
                   class="w-full"
                 />
-                <div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                  <span>临时邮箱服务</span>
-                  <HelpTip text="选择用于自动注册账号的临时邮箱服务提供商。" />
-                </div>
-                <SelectMenu
-                  v-model="localSettings.basic.temp_mail_provider"
-                  :options="tempMailProviderOptions"
-                  class="w-full"
-                />
-
+                
                 <!-- DuckMail 配置 -->
-                <template v-if="localSettings.basic.temp_mail_provider === 'duckmail'">
-                  <Checkbox v-model="localSettings.basic.duckmail_verify_ssl">
-                    DuckMail SSL 校验
-                  </Checkbox>
+                <template v-if="localSettings.basic.mail_service === 'duckmail'">
                   <label class="block text-xs text-muted-foreground">DuckMail API</label>
                   <input
                     v-model="localSettings.basic.duckmail_base_url"
@@ -113,33 +80,48 @@
                     class="w-full rounded-2xl border border-input bg-background px-3 py-2 text-sm"
                     placeholder="dk_xxx"
                   />
+                  <Checkbox v-model="localSettings.basic.duckmail_verify_ssl">
+                    DuckMail SSL 校验
+                  </Checkbox>
                 </template>
-
-                <!-- Moemail 配置 -->
-                <template v-if="localSettings.basic.temp_mail_provider === 'moemail'">
-                  <label class="block text-xs text-muted-foreground">Moemail API</label>
+                
+                <!-- Freemail 配置 -->
+                <template v-if="localSettings.basic.mail_service === 'freemail'">
+                  <label class="block text-xs text-muted-foreground">Freemail API 地址</label>
                   <input
-                    v-model="localSettings.basic.moemail_base_url"
+                    v-model="localSettings.basic.freemail_base_url"
                     type="text"
                     class="w-full rounded-2xl border border-input bg-background px-3 py-2 text-sm"
-                    placeholder="https://moemail.app"
+                    placeholder="http://your-freemail-server.com"
                   />
-                  <label class="block text-xs text-muted-foreground">Moemail API 密钥</label>
+                  <label class="block text-xs text-muted-foreground">JWT Token</label>
                   <input
-                    v-model="localSettings.basic.moemail_api_key"
+                    v-model="localSettings.basic.freemail_jwt_token"
                     type="text"
-                    class="w-full rounded-2xl border border-input bg-background px-3 py-2 text-sm"
-                    placeholder="X-API-Key"
+                    class="w-full rounded-2xl border border-input bg-background px-3 py-2 text-sm font-mono"
+                    placeholder="输入管理员 JWT Token"
+                    @blur="loadFreemailDomains"
                   />
-                  <label class="block text-xs text-muted-foreground">Moemail 域名（可选，留空随机）</label>
-                  <input
-                    v-model="localSettings.basic.moemail_domain"
-                    type="text"
-                    class="w-full rounded-2xl border border-input bg-background px-3 py-2 text-sm"
-                    placeholder="moemail.app"
-                  />
+                  <Checkbox v-model="localSettings.basic.freemail_verify_ssl">
+                    Freemail SSL 校验
+                  </Checkbox>
                 </template>
-
+                
+                <div class="flex items-center justify-end gap-2">
+                  <Checkbox v-model="localSettings.basic.browser_headless">
+                    无头浏览器
+                  </Checkbox>
+                  <HelpTip text="无头模式适用于服务器环境（如 Docker）。若注册/刷新失败，建议关闭。" />
+                </div>
+                <div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>浏览器引擎</span>
+                  <HelpTip text="UC: 支持无头/有头，但可能失败。DP: 支持无头/有头，更稳定，推荐使用。" />
+                </div>
+                <SelectMenu
+                  v-model="localSettings.basic.browser_engine"
+                  :options="browserEngineOptions"
+                  class="w-full"
+                />
                 <div class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                   <span>过期刷新窗口（小时）</span>
                   <HelpTip text="当账号距离过期小于等于该值时，会触发自动登录刷新（更新 cookie/session）。" />
@@ -155,6 +137,7 @@
                   v-model.number="localSettings.basic.register_default_count"
                   type="number"
                   min="1"
+                  max="30"
                   class="w-full rounded-2xl border border-input bg-background px-3 py-2 text-sm"
                 />
                 <label class="block text-xs text-muted-foreground">默认注册域名（推荐）</label>
@@ -227,19 +210,6 @@
             </div>
 
             <div class="rounded-2xl border border-border bg-card p-4">
-              <p class="text-xs uppercase tracking-[0.3em] text-muted-foreground">视频生成</p>
-              <div class="mt-4 space-y-3">
-                <label class="block text-xs text-muted-foreground">输出格式（使用 gemini-veo 模型时生效）</label>
-                <SelectMenu
-                  v-model="localSettings.video_generation.output_format"
-                  :options="videoOutputOptions"
-                  placement="up"
-                  class="w-full"
-                />
-              </div>
-            </div>
-
-            <div class="rounded-2xl border border-border bg-card p-4">
               <p class="text-xs uppercase tracking-[0.3em] text-muted-foreground">公开展示</p>
               <div class="mt-4 space-y-3">
                 <label class="block text-xs text-muted-foreground">Logo 地址</label>
@@ -285,7 +255,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useSettingsStore } from '@/stores/settings'
+import { useSettingsStore } from '@/stores'
 import { useToast } from '@/composables/useToast'
 import SelectMenu from '@/components/ui/SelectMenu.vue'
 import Checkbox from '@/components/ui/Checkbox.vue'
@@ -315,22 +285,18 @@ const rateLimitCooldownHours = computed({
   }
 })
 
+const freemailDomains = ref<string[]>([])
 const browserEngineOptions = [
   { label: 'UC - 支持无头/有头', value: 'uc' },
   { label: 'DP - 支持无头/有头（推荐）', value: 'dp' },
 ]
-const tempMailProviderOptions = [
-  { label: 'DuckMail', value: 'duckmail' },
-  { label: 'Moemail', value: 'moemail' },
+const mailServiceOptions = [
+  { label: 'DuckMail（默认）', value: 'duckmail' },
+  { label: 'Freemail（自建服务）', value: 'freemail' },
 ]
 const imageOutputOptions = [
   { label: 'Base64 编码', value: 'base64' },
   { label: 'URL 链接', value: 'url' },
-]
-const videoOutputOptions = [
-  { label: 'HTML 视频标签', value: 'html' },
-  { label: 'URL 链接', value: 'url' },
-  { label: 'Markdown 格式', value: 'markdown' },
 ]
 const imageModelOptions = computed(() => {
   const baseOptions = [
@@ -351,16 +317,30 @@ const imageModelOptions = computed(() => {
   return baseOptions
 })
 
+const freemailDomainOptions = computed(() => {
+  const options = [{ label: '自动选择', value: '' }]
+  for (const domain of freemailDomains.value) {
+    options.push({ label: domain, value: domain })
+  }
+  return options
+})
+
 watch(settings, (value) => {
   if (!value) return
   const next = JSON.parse(JSON.stringify(value))
   next.image_generation = next.image_generation || { enabled: false, supported_models: [], output_format: 'base64' }
   next.image_generation.output_format ||= 'base64'
-  next.video_generation = next.video_generation || { output_format: 'html' }
-  next.video_generation.output_format ||= 'html'
   next.basic = next.basic || {}
+  // 只在未设置时才使用默认值，保留已保存的配置
+  if (!next.basic.mail_service) {
+    next.basic.mail_service = 'duckmail'
+  }
   next.basic.duckmail_base_url ||= 'https://api.duckmail.sbs'
   next.basic.duckmail_verify_ssl = next.basic.duckmail_verify_ssl ?? true
+  next.basic.freemail_base_url = next.basic.freemail_base_url || 'http://your-freemail-server.com'
+  next.basic.freemail_jwt_token = next.basic.freemail_jwt_token || ''
+  next.basic.freemail_verify_ssl = next.basic.freemail_verify_ssl ?? true
+  next.basic.freemail_domain = next.basic.freemail_domain || ''
   next.basic.browser_engine = next.basic.browser_engine || 'dp'
   next.basic.browser_headless = next.basic.browser_headless ?? false
   next.basic.refresh_window_hours = Number.isFinite(next.basic.refresh_window_hours)
@@ -375,14 +355,6 @@ watch(settings, (value) => {
   next.basic.duckmail_api_key = typeof next.basic.duckmail_api_key === 'string'
     ? next.basic.duckmail_api_key
     : ''
-  next.basic.temp_mail_provider = next.basic.temp_mail_provider || 'duckmail'
-  next.basic.moemail_base_url = next.basic.moemail_base_url || 'https://moemail.app'
-  next.basic.moemail_api_key = typeof next.basic.moemail_api_key === 'string'
-    ? next.basic.moemail_api_key
-    : ''
-  next.basic.moemail_domain = typeof next.basic.moemail_domain === 'string'
-    ? next.basic.moemail_domain
-    : ''
   next.retry = next.retry || {}
   next.retry.auto_refresh_accounts_seconds = Number.isFinite(next.retry.auto_refresh_accounts_seconds)
     ? next.retry.auto_refresh_accounts_seconds
@@ -393,6 +365,27 @@ watch(settings, (value) => {
 onMounted(async () => {
   await settingsStore.loadSettings()
 })
+
+const loadFreemailDomains = async () => {
+  if (!localSettings.value?.basic.freemail_jwt_token || !localSettings.value?.basic.freemail_base_url) {
+    return
+  }
+
+  try {
+    const baseUrl = localSettings.value.basic.freemail_base_url
+    const token = localSettings.value.basic.freemail_jwt_token
+    const response = await fetch(`${baseUrl}/api/domains?admin_token=${token}`)
+    
+    if (response.ok) {
+      const domains = await response.json()
+      if (Array.isArray(domains)) {
+        freemailDomains.value = domains
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load Freemail domains:', error)
+  }
+}
 
 const handleSave = async () => {
   if (!localSettings.value) return

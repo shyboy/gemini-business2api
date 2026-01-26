@@ -11,6 +11,7 @@ from core.account import load_accounts_from_source
 from core.base_task_service import BaseTask, BaseTaskService, TaskCancelledError, TaskStatus
 from core.config import config
 from core.duckmail_client import DuckMailClient
+from core.freemail_client import FreemailClient
 from core.gemini_automation import GeminiAutomation
 from core.gemini_automation_uc import GeminiAutomationUC
 from core.microsoft_mail_client import MicrosoftMailClient
@@ -161,7 +162,24 @@ class LoginService(BaseTaskService[LoginTask]):
         log_cb("info", f"📧 邮件提供商: {mail_provider}")
 
         # 创建邮件客户端
-        if mail_provider == "microsoft":
+        if mail_provider == "freemail":
+            # Freemail 服务 - 优先使用全局配置的 JWT token（支持更新 token 后自动应用）
+            mail_jwt_token = config.basic.freemail_jwt_token or account.get("mail_jwt_token", "")
+            mail_base_url = config.basic.freemail_base_url or account.get("mail_base_url", "http://your-freemail-server.com")
+            
+            if not mail_jwt_token:
+                return {"success": False, "email": account_id, "error": "freemail jwt token missing"}
+            
+            client = FreemailClient(
+                base_url=mail_base_url,
+                jwt_token=mail_jwt_token,
+                proxy=config.basic.proxy,
+                verify_ssl=config.basic.freemail_verify_ssl,
+                log_callback=log_cb,
+            )
+            mail_address = account.get("mail_address") or account_id
+            client.set_credentials(mail_address)
+        elif mail_provider == "microsoft":
             if not mail_client_id or not mail_refresh_token:
                 return {"success": False, "email": account_id, "error": "Microsoft OAuth 配置缺失"}
             mail_address = account.get("mail_address") or account_id
@@ -243,13 +261,24 @@ class LoginService(BaseTaskService[LoginTask]):
 
         # 更新账户配置
         config_data = result["config"]
-        config_data["mail_provider"] = mail_provider
-        config_data["mail_password"] = mail_password
-        if mail_provider == "microsoft":
+        
+        # 保留邮箱服务提供商信息
+        if mail_provider == "freemail":
+            config_data["mail_provider"] = "freemail"
+            config_data["mail_address"] = account.get("mail_address") or account_id
+            config_data["mail_password"] = None
+            config_data["mail_jwt_token"] = account.get("mail_jwt_token")
+            config_data["mail_base_url"] = account.get("mail_base_url")
+        elif mail_provider == "microsoft":
+            config_data["mail_provider"] = "microsoft"
             config_data["mail_address"] = account.get("mail_address") or account_id
             config_data["mail_client_id"] = mail_client_id
             config_data["mail_refresh_token"] = mail_refresh_token
             config_data["mail_tenant"] = mail_tenant
+        else:
+            config_data["mail_provider"] = "duckmail"
+            config_data["mail_password"] = mail_password
+        
         config_data["disabled"] = account.get("disabled", False)
 
         for acc in accounts:
@@ -278,13 +307,18 @@ class LoginService(BaseTaskService[LoginTask]):
                 else:
                     mail_provider = "duckmail"
 
-            mail_password = account.get("mail_password") or account.get("email_password")
-            if mail_provider == "microsoft":
+            # 检查是否有必要的凭据
+            if mail_provider == "freemail":
+                if not account.get("mail_jwt_token"):
+                    continue
+            elif mail_provider == "microsoft":
                 if not account.get("mail_client_id") or not account.get("mail_refresh_token"):
                     continue
             else:
+                mail_password = account.get("mail_password") or account.get("email_password")
                 if not mail_password:
                     continue
+            
             expires_at = account.get("expires_at")
             if not expires_at:
                 continue
