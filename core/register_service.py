@@ -149,7 +149,17 @@ class RegisterService(BaseTaskService[RegisterTask]):
                 domain=domain or config.basic.moemail_domain,
                 log_callback=log_cb,
             )
+        elif temp_mail_provider == "freemail":
+            from core.freemail_client import FreemailClient
+            client = FreemailClient(
+                base_url=config.basic.freemail_base_url,
+                jwt_token=config.basic.freemail_jwt_token,
+                proxy=config.basic.proxy_for_auth,
+                verify_ssl=config.basic.freemail_verify_ssl,
+                log_callback=log_cb,
+            )
         else:
+            # 默认使用 DuckMail
             client = DuckMailClient(
                 base_url=config.basic.duckmail_base_url,
                 proxy=config.basic.proxy_for_auth,
@@ -158,7 +168,9 @@ class RegisterService(BaseTaskService[RegisterTask]):
                 log_callback=log_cb,
             )
 
-        if not client.register_account(domain=domain):
+        # 注册邮箱（freemail 使用配置的域名或参数传入的域名）
+        register_domain = config.basic.freemail_domain or domain if temp_mail_provider == "freemail" else domain
+        if not client.register_account(domain=register_domain):
             log_cb("error", f"❌ {temp_mail_provider} 邮箱注册失败")
             return {"success": False, "error": f"{temp_mail_provider} 注册失败"}
 
@@ -207,9 +219,19 @@ class RegisterService(BaseTaskService[RegisterTask]):
         log_cb("info", "✅ Gemini 登录成功，正在保存配置...")
 
         config_data = result["config"]
+
+        # 保存邮箱服务提供商信息（支持三种：duckmail/moemail/freemail）
         config_data["mail_provider"] = temp_mail_provider
         config_data["mail_address"] = client.email
-        config_data["mail_password"] = client.password
+
+        if temp_mail_provider == "freemail":
+            # Freemail 使用 JWT Token 认证，不需要密码
+            config_data["mail_password"] = None
+            config_data["mail_jwt_token"] = config.basic.freemail_jwt_token
+            config_data["mail_base_url"] = config.basic.freemail_base_url
+        else:
+            # DuckMail 和 Moemail 使用密码认证
+            config_data["mail_password"] = client.password
 
         accounts_data = load_accounts_from_source()
         updated = False

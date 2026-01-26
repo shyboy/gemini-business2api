@@ -47,13 +47,26 @@ class BasicConfig(BaseModel):
     base_url: str = Field(default="", description="服务器URL（留空则自动检测）")
     proxy_for_auth: str = Field(default="", description="账户操作代理地址（注册/登录/刷新，留空则不使用代理）")
     proxy_for_chat: str = Field(default="", description="对话操作代理地址（JWT/会话/消息，留空则不使用代理）")
+
+    # 邮箱服务选择（支持三种：duckmail/moemail/freemail）
+    temp_mail_provider: str = Field(default="duckmail", description="临时邮箱提供商: duckmail/moemail/freemail")
+
+    # DuckMail 配置
     duckmail_base_url: str = Field(default="https://api.duckmail.sbs", description="DuckMail API地址")
     duckmail_api_key: str = Field(default="", description="DuckMail API key")
     duckmail_verify_ssl: bool = Field(default=True, description="DuckMail SSL校验")
-    temp_mail_provider: str = Field(default="duckmail", description="临时邮箱提供商: duckmail/moemail")
+
+    # Moemail 配置
     moemail_base_url: str = Field(default="https://moemail.app", description="Moemail API地址")
     moemail_api_key: str = Field(default="", description="Moemail API key")
     moemail_domain: str = Field(default="", description="Moemail 邮箱域名（可选，留空则随机选择）")
+
+    # Freemail 配置
+    freemail_base_url: str = Field(default="http://your-freemail-server.com", description="Freemail API地址")
+    freemail_jwt_token: str = Field(default="", description="Freemail JWT Token")
+    freemail_verify_ssl: bool = Field(default=True, description="Freemail SSL校验")
+    freemail_domain: str = Field(default="", description="Freemail 域名（留空自动选择）")
+
     browser_engine: str = Field(default="dp", description="浏览器引擎：uc 或 dp")
     browser_headless: bool = Field(default=False, description="自动化浏览器无头模式")
     refresh_window_hours: int = Field(default=1, ge=0, le=24, description="过期刷新窗口（小时）")
@@ -164,6 +177,7 @@ class ConfigManager:
         register_default_raw = basic_data.get("register_default_count", 1)
         register_domain_raw = basic_data.get("register_domain", "")
         duckmail_api_key_raw = basic_data.get("duckmail_api_key", "")
+        freemail_jwt_token_raw = basic_data.get("freemail_jwt_token", "")
 
         # 兼容旧配置：如果存在旧的 proxy 字段，迁移到新字段
         old_proxy = basic_data.get("proxy", "")
@@ -185,18 +199,25 @@ class ConfigManager:
             if isinstance(old_proxy_for_chat_bool, bool) and old_proxy_for_chat_bool:
                 proxy_for_chat = old_proxy
 
+        # 兼容旧配置：mail_service 字段迁移到 temp_mail_provider
+        temp_mail_provider = basic_data.get("temp_mail_provider") or basic_data.get("mail_service") or "duckmail"
+
         basic_config = BasicConfig(
             api_key=basic_data.get("api_key") or "",
             base_url=basic_data.get("base_url") or "",
             proxy_for_auth=str(proxy_for_auth or "").strip(),
             proxy_for_chat=str(proxy_for_chat or "").strip(),
+            temp_mail_provider=temp_mail_provider,
             duckmail_base_url=basic_data.get("duckmail_base_url") or "https://api.duckmail.sbs",
             duckmail_api_key=str(duckmail_api_key_raw or "").strip(),
             duckmail_verify_ssl=_parse_bool(basic_data.get("duckmail_verify_ssl"), True),
-            temp_mail_provider=basic_data.get("temp_mail_provider") or "duckmail",
             moemail_base_url=basic_data.get("moemail_base_url") or "https://moemail.app",
             moemail_api_key=str(basic_data.get("moemail_api_key") or "").strip(),
             moemail_domain=str(basic_data.get("moemail_domain") or "").strip(),
+            freemail_base_url=basic_data.get("freemail_base_url") or "http://your-freemail-server.com",
+            freemail_jwt_token=str(freemail_jwt_token_raw or "").strip(),
+            freemail_verify_ssl=_parse_bool(basic_data.get("freemail_verify_ssl"), True),
+            freemail_domain=str(basic_data.get("freemail_domain") or "").strip(),
             browser_engine=basic_data.get("browser_engine") or "dp",
             browser_headless=_parse_bool(basic_data.get("browser_headless"), False),
             refresh_window_hours=int(refresh_window_raw),
