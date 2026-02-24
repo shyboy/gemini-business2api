@@ -2432,6 +2432,7 @@ async def stream_chat_generator(session: str, text_content: str, file_ids: List[
     start_time = time.time()
     full_content = ""
     first_response_time = None
+    usage_counted = False
 
     # 记录发送给API的内容
     text_preview = text_content[:500] + "...(已截断)" if len(text_content) > 500 else text_content
@@ -2580,23 +2581,22 @@ async def stream_chat_generator(session: str, text_content: str, file_ids: List[
                         logger.debug(f"[API] [{account_manager.config.account_id}] [req_{request_id}] Reply#{idx}无text，content_obj结构: {json.dumps(content_obj, ensure_ascii=False)[:300]}")
                         continue
 
+                    # 首次收到响应时记录时间和计数
+                    if first_response_time is None:
+                        first_response_time = time.time()
+                        if request is not None:
+                            request.state.first_response_time = first_response_time
+                    if not usage_counted:
+                        usage_counted = True
+                        account_manager.conversation_count += 1
+                        account_manager.increment_daily_usage(get_request_quota_type(model_name))
+
                     # 区分思考过程和正常内容
                     if content_obj.get("thought"):
                         # 思考过程使用 reasoning_content 字段（类似 OpenAI o1）
-                        if first_response_time is None:
-                            first_response_time = time.time()
-                            if request is not None:
-                                request.state.first_response_time = first_response_time
                         chunk = create_chunk(chat_id, created_time, model_name, {"reasoning_content": text}, None)
                         yield f"data: {chunk}\n\n"
                     else:
-                        if first_response_time is None:
-                            first_response_time = time.time()
-                            if request is not None:
-                                request.state.first_response_time = first_response_time
-                            # 第一次响应时统计成功次数
-                            account_manager.conversation_count += 1
-                            account_manager.increment_daily_usage(get_request_quota_type(model_name))
                         # 正常内容使用 content 字段
                         full_content += text
                         chunk = create_chunk(chat_id, created_time, model_name, {"content": text}, None)
@@ -2616,9 +2616,11 @@ async def stream_chat_generator(session: str, text_content: str, file_ids: List[
                 quota_type = get_request_quota_type(model_name)
                 if quota_type in ("images", "videos"):
                     logger.info(f"[API] [{account_manager.config.account_id}] [req_{request_id}] 媒体生成请求，无文本内容属正常情况")
-                    # 媒体生成成功，计入每日配额
-                    account_manager.conversation_count += 1
-                    account_manager.increment_daily_usage(quota_type)
+                    # 媒体生成成功，计入每日配额（避免重复计数）
+                    if not usage_counted:
+                        usage_counted = True
+                        account_manager.conversation_count += 1
+                        account_manager.increment_daily_usage(quota_type)
                 else:
                     logger.warning(f"[API] [{account_manager.config.account_id}] [req_{request_id}] ⚠️ 空响应警告: 收到{response_count}个响应但无文本内容，可能是思考模型未生成最终回答或上游错误")
                     # 打印第一个响应对象的完整结构用于调试
